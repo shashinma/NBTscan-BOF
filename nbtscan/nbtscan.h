@@ -1,21 +1,11 @@
 #ifndef NBTSCAN_H
 #define NBTSCAN_H
 
-#include <Winsock2.h>
-#include <Windows.h>
+#include <winsock2.h>
+#include <windows.h>
 
-#include "../_include/beacon.h"
-#include "../_include/bofdefs.h"
-
-#if defined(__has_include) && __has_include("../_include/adaptix.h")
-    #include "../_include/adaptix.h"
-    #define HAVE_ADAPTIX 1
-#elif defined(HAVE_ADAPTIX_H)
-    #include "../_include/adaptix.h"
-    #define HAVE_ADAPTIX 1
-#else
-    #define HAVE_ADAPTIX 0
-#endif
+#include "beacon.h"
+#include "bofdefs.h"
 
 __declspec(dllimport) unsigned long __stdcall WS2_32$inet_addr(const char *cp);
 __declspec(dllimport) unsigned short __stdcall WS2_32$htons(unsigned short hostshort);

@@ -11,6 +11,7 @@ static void nbtscan_strcpy(char *dst, const char *src) {
     MSVCRT$strcpy(dst, src);
 }
 
+
 static char *nbtscan_strchr(char *s, int c) {
     return MSVCRT$strchr(s, c);
 }
@@ -576,63 +577,6 @@ static void nbtscan_print_hostinfo_hosts(const char *ip,
     }
 }
 
-#if HAVE_ADAPTIX
-static void nbtscan_emit_ax_target(const char *ip, const nb_host_info_t *info, const char *tag) {
-    if (!ip || !info) return;
-
-    char comp_name[16];
-    char user_name[16];
-    char domain_name[16];
-    int dummy_server = 0;
-    int is_domain = 0;
-
-    nbtscan_pick_names(info, comp_name, user_name, domain_name, &dummy_server, &is_domain);
-    if (!comp_name[0]) nbtscan_strcpy(comp_name, "<unknown>");
-    if (!user_name[0]) nbtscan_strcpy(user_name, "<unknown>");
-
-    char info_buf[128] = {0};
-    MSVCRT$strcpy(info_buf, "nbtscan");
-    if (user_name[0] && MSVCRT$strcmp(user_name, "<unknown>") != 0) {
-        MSVCRT$strcat(info_buf, ", user=");
-        MSVCRT$strcat(info_buf, user_name);
-    }
-
-    const char *tag_str = (tag && tag[0]) ? tag : "";
-
-    char domain_final[64] = {0};
-    if (domain_name[0] && MSVCRT$strcmp(domain_name, "<unknown>") != 0) {
-        if (nbtscan_strchr(domain_name, '.') == NULL) {
-            if (is_domain) {
-                MSVCRT$strcpy(domain_final, domain_name);
-                MSVCRT$strcat(domain_final, ".local");
-            } else {
-                MSVCRT$strcpy(domain_final, domain_name);
-            }
-        } else {
-            MSVCRT$strcpy(domain_final, domain_name);
-        }
-    }
-
-    AxAddTarget(
-        comp_name[0] ? comp_name : "",
-        domain_final[0] ? domain_final : "",
-        (char*)ip,
-        0,
-        "",
-        (char*)tag_str,
-        info_buf,
-        1
-    );
-}
-#else
-static void nbtscan_emit_ax_target(const char *ip, const nb_host_info_t *info, const char *tag) {
-    // Adaptix not available - do nothing
-    (void)ip;
-    (void)info;
-    (void)tag;
-}
-#endif
-
 void go(char *args, int alen) {
     datap parser;
     char *targets = NULL;
@@ -642,8 +586,6 @@ void go(char *args, int alen) {
     int lmhosts = 0;
     char *sep = NULL;
     int timeout_ms = 1000;
-    char *tag = NULL;
-    int no_targets = 0;
 
     BeaconDataParse(&parser, args, alen);
     targets    = (char*)BeaconDataExtract(&parser, NULL);
@@ -653,8 +595,6 @@ void go(char *args, int alen) {
     lmhosts    = BeaconDataInt(&parser);
     sep        = (char*)BeaconDataExtract(&parser, NULL);
     timeout_ms = BeaconDataInt(&parser);
-    tag        = (char*)BeaconDataExtract(&parser, NULL);
-    no_targets = BeaconDataInt(&parser);
 
     if (!targets || !targets[0]) {
         BeaconPrintf(CALLBACK_ERROR, "nbtscan: no targets specified");
@@ -794,10 +734,6 @@ void go(char *args, int alen) {
             nbtscan_print_hostinfo_normal(ip_str, &info);
         }
 
-        if (!no_targets) {
-            nbtscan_emit_ax_target(ip_str, &info, tag);
-        }
-
         nbtscan_free_hostinfo(&info);
     }
 
@@ -807,4 +743,3 @@ void go(char *args, int alen) {
     WS2_32$closesocket(sock);
     WS2_32$WSACleanup();
 }
-

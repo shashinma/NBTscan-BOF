@@ -12,7 +12,6 @@ cmd_nbtscan.addArgBool("-l", "lmhosts");
 cmd_nbtscan.addArgFlagString("-s", "separator", "Script-friendly output separator (enables script mode)", "");
 cmd_nbtscan.addArgFlagString("-t", "timeout", "Response timeout in milliseconds (default 1000)", "");
 cmd_nbtscan.addArgBool("-no-targets", "Disable automatic target registration");
-
 cmd_nbtscan.setPreHook(function (id, cmdline, parsed_json, ...parsed_lines) {
     let target    = parsed_json["target"];
     let verbose   = parsed_json["-v"] ? 1 : 0;
@@ -31,22 +30,55 @@ cmd_nbtscan.setPreHook(function (id, cmdline, parsed_json, ...parsed_lines) {
         }
     }
 
-    let bof_params = ax.bof_pack("cstr,int,int,int,int,cstr,int,cstr,int", [
-        target,
-        verbose,
-        quiet,
-        etc_hosts,
-        lmhosts,
-        sep,
-        timeout_ms,
-        "",
-        no_targets
-    ]);
-
+    let bof_params = ax.bof_pack("cstr,int,int,int,int,cstr,int", [ target, verbose, quiet, etc_hosts, lmhosts, sep, timeout_ms ]);
     let bof_path = ax.script_dir() + "_bin/nbtscan." + ax.arch(id) + ".o";
     let message = "NBTscan: " + target;
 
-    ax.execute_alias(id, cmdline, `execute bof ${bof_path} ${bof_params}`, message);
+    if(no_targets == 1) {
+        ax.execute_alias(id, cmdline, `execute bof ${bof_path} ${bof_params}`, message);
+    }
+    else {
+        let targets_handler = function (task) {
+            let blocks = task.text.trim().split('\n');
+            var results = [];
+            const ipRegex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+([^\s]+)\s+([^\s]+)/;
+            for (const line of blocks) {
+
+                if (results.length > 1000) {
+                    ax.targets_add_list(results);
+                    results.length = 0;
+                }
+
+                const match = line.trim().match(ipRegex);
+                if (!match)
+                    continue;
+
+                const [, ip, netbiosName, domain] = match;
+
+                const octets = ip.split('.');
+                const isValid = octets.length === 4 &&
+                    octets.every(octet => {
+                        const num = parseInt(octet, 10);
+                        return num >= 0 && num <= 255 && /^\d+$/.test(octet);
+                    });
+                if (!isValid)
+                    continue;
+
+                const obj = {
+                    address: ip,
+                    computer: netbiosName,
+                    domain: domain,
+                    alive: true,
+                    info: "collected from nbtscan"
+                };
+                results.push(obj);
+            }
+            if (results.length > 0) ax.targets_add_list(results);
+            return task;
+        }
+
+        ax.execute_alias(id, cmdline, `execute bof ${bof_path} ${bof_params}`, message, targets_handler);
+    }
 });
 
 var group_test = ax.create_commands_group("SAR-BOF", [cmd_nbtscan]);
